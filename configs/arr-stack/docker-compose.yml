@@ -1,0 +1,115 @@
+version: "3"
+# Arr-stack: Sonarr + Radarr + qBittorrent + Prowlarr, all routed through Gluetun (PIA VPN).
+#
+# All arr-stack services share Gluetun's network namespace (network_mode: "service:gluetun").
+# This means:
+#   - All download/indexer traffic exits through Private Internet Access VPN
+#   - Ports are published through Gluetun, not through individual containers
+#   - If Gluetun's VPN drops, all containers lose internet access (kill-switch behavior)
+#   - Services reach each other via localhost (shared network namespace)
+#
+# Web UIs are VPN-only — restrict at the firewall level (see Chapter 8).
+# They should NOT be publicly reachable even though ports are published here.
+
+services:
+  gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - 6881:6881          # qBittorrent peer port
+      - 6881:6881/udp
+      - 8085:8085          # qBittorrent WebUI
+      - 8989:8989          # Sonarr
+      - 7878:7878          # Radarr
+      - 9696:9696          # Prowlarr
+      # Add Jackett port here if you prefer Jackett over Prowlarr (not recommended — see Chapter 7)
+    volumes:
+      - /opt/arr-stack/gluetun:/gluetun
+    environment:
+      - VPN_SERVICE_PROVIDER=private internet access
+      - VPN_TYPE=openvpn
+      - OPENVPN_USER=${OPENVPN_USER}
+      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
+      - SERVER_REGIONS=YOUR_PREFERRED_REGION   # e.g. "US East", "CA Vancouver"
+      - VPN_PORT_FORWARDING=on
+      - TZ=YOUR_TIMEZONE                       # e.g. America/New_York
+      - UPDATER_PERIOD=24h
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent
+    container_name: qbittorrent
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=YOUR_TIMEZONE
+      - WEBUI_PORT=8085
+    volumes:
+      - /opt/arr-stack/qbittorrent/config:/config
+      - /opt/arr-stack/downloads:/downloads
+    depends_on:
+      - gluetun
+    restart: always
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=YOUR_TIMEZONE
+    volumes:
+      - /opt/arr-stack/sonarr/data:/config
+      - /opt/arr-stack/tv:/tv                # local storage — see Chapter 6 for why not FUSE
+      - /opt/arr-stack/downloads:/downloads
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=YOUR_TIMEZONE
+    volumes:
+      - /opt/arr-stack/radarr/data:/config
+      - /opt/arr-stack/movies:/movies        # local storage — same reason
+      - /opt/arr-stack/downloads:/downloads
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=YOUR_TIMEZONE
+    volumes:
+      - /opt/arr-stack/prowlarr/data:/config
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # Optional: FlareSolverr for Cloudflare-protected indexers (1337x, etc.)
+  # flaresolverr:
+  #   image: ghcr.io/flaresolverr/flaresolverr:latest
+  #   container_name: flaresolverr
+  #   network_mode: "service:gluetun"
+  #   environment:
+  #     - LOG_LEVEL=info
+  #   depends_on:
+  #     - gluetun
+  #   restart: unless-stopped
+  # Then in Prowlarr: Settings → Indexers → Add FlareSolverr proxy → http://localhost:8191

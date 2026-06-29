@@ -1,0 +1,27 @@
+# Research Brain — single backend service.
+#
+# NOTE: there is intentionally NO Caddy or ChromaDB service here.
+#   * If you already run a shared Caddy (recommended on a busy VPS), add a vhost
+#     to it instead of starting a second proxy — see the Caddyfile in configs/wirehole/caddy/.
+#   * ChromaDB runs *embedded* inside the backend process (persisted to the
+#     chroma_data volume), which is lighter on memory-constrained VPS hosts.
+#
+# The backend publishes ONLY on loopback (127.0.0.1:8001). Caddy (or your
+# reverse proxy of choice) proxies to it — the port is never public directly.
+
+services:
+  backend:
+    build: ./backend
+    container_name: research-brain
+    env_file: .env
+    volumes:
+      - ./frontend:/app/frontend:ro            # serve the UI (read-only)
+      - chroma_data:/app/data/chroma           # persist the vector DB
+      - ./data/synthesis:/app/data/synthesis   # synthesis .md docs (host-visible)
+      - ./data/chats:/app/data/chats           # persistent chat threads (JSON)
+    ports:
+      - "127.0.0.1:8001:8000"                 # loopback only — never publicly exposed
+    restart: unless-stopped
+
+volumes:
+  chroma_data:

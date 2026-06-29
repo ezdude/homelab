@@ -1,0 +1,49 @@
+{
+	email admin@YOUR_DOMAIN
+	# Pi-hole owns port 80 — Caddy must never try to bind it or redirect to it
+	auto_https disable_redirects
+}
+
+# Nextcloud
+cloud.YOUR_DOMAIN {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+
+	# Nextcloud push notifications (must come before the catch-all reverse_proxy)
+	reverse_proxy /push/* 172.18.0.11:7867  # notify_push container bridge IP
+
+	reverse_proxy 172.18.0.10:80 {          # Nextcloud container bridge IP
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto https
+	}
+
+	header Strict-Transport-Security "max-age=15552000;"
+
+	redir /.well-known/carddav /remote.php/dav/ 301
+	redir /.well-known/caldav /remote.php/dav/ 301
+}
+
+# Jellyfin (VPN-only — restrict at UFW/iptables level, not Caddy)
+# Caddy is host-network; reach Jellyfin via WireGuard interface IP
+# NOT 127.0.0.1 — iptables rules may drop loopback to this port
+media.YOUR_DOMAIN {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+	reverse_proxy YOUR_WG_HOST_IP:8096
+	header Strict-Transport-Security "max-age=15552000;"
+}
+
+# Research Brain (public, authenticated at app level)
+brain.YOUR_DOMAIN {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+	reverse_proxy 127.0.0.1:8001 {
+		flush_interval -1            # required for SSE streaming — X-Accel-Buffering is nginx-only
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto https
+	}
+	header Strict-Transport-Security "max-age=15552000;"
+}

@@ -1,0 +1,10 @@
+# Never commit real secrets
+.env
+*.env.local
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
