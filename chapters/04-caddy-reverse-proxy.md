@@ -14,7 +14,7 @@ Let's Encrypt verifies domain ownership in one of two ways:
 
 **DNS-01:** Create a specific `_acme-challenge.yourdomain.com` TXT record in DNS. The ACME server checks the record via DNS lookup — no HTTP involved, no port 80 needed.
 
-DNS-01 requires API access to your DNS provider. Since the domain is on Cloudflare, I use Caddy's `caddy-dns/cloudflare` plugin with a Cloudflare API token scoped to `Zone:DNS:Edit` on the `ezdude.lat` zone. Caddy writes and deletes the challenge TXT record automatically.
+DNS-01 requires API access to your DNS provider. Since the domain is on Cloudflare, I use Caddy's `caddy-dns/cloudflare` plugin with a Cloudflare API token scoped to `Zone:DNS:Edit` on the `YOUR_DOMAIN` zone. Caddy writes and deletes the challenge TXT record automatically.
 
 **Bonus:** DNS-01 works even for services that are never publicly accessible (like Nextcloud when it was VPN-only). You can get a real browser-trusted cert for a service that doesn't have a public IP.
 
